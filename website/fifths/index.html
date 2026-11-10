@@ -5,14 +5,42 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Circle of Fifths Quiz</title>
 <style>
+  :root {
+    color-scheme: light;
+    --bg: #ffffff;
+    --text: #111111;
+    --line: #cccccc;
+    --field: #ffffff;
+    --correct: #0a6b0a;
+    --incorrect: #b00000;
+    --toggle: #222222;
+  }
+  html.theme-dark {
+    color-scheme: dark;
+    --bg: #141414;
+    --text: #eeeeee;
+    --line: #444444;
+    --field: #1e1e1e;
+    --correct: #6fcf6f;
+    --incorrect: #ff7b7b;
+    --toggle: #eeeeee;
+  }
   body {
     font-family: sans-serif;
     max-width: 700px;
     margin: 2em auto;
     padding: 0 1em;
     line-height: 1.5;
+    background: var(--bg);
+    color: var(--text);
   }
-  h1 { font-size: 1.4em; }
+  h1 { font-size: 1.4em; margin: 0; }
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+  }
   label { display: block; margin-top: 1.2em; font-weight: bold; }
   input[type="text"] {
     width: 100%;
@@ -20,29 +48,51 @@
     padding: 0.35em;
     font-size: 1em;
     margin-top: 0.25em;
+    background: var(--field);
+    color: var(--text);
+    border: 1px solid var(--line);
   }
   button {
     font-size: 1em;
     padding: 0.4em 0.9em;
     margin-top: 1.2em;
     cursor: pointer;
+    background: var(--field);
+    color: var(--text);
+    border: 1px solid var(--line);
   }
   .result { margin-top: 0.35em; }
-  .correct { color: green; }
-  .incorrect { color: #b00000; }
+  .correct { color: var(--correct); }
+  .incorrect { color: var(--incorrect); }
   .answer { font-family: monospace; }
   #fifths-image {
     display: block;
     margin: 1.5em auto 0;
     max-width: 50%;
     height: auto;
-    border: 1px solid #ccc;
+    border: 1px solid var(--line);
+  }
+  .theme-toggle {
+    position: static;
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    padding: 0;
+    background: var(--toggle);
+    border: 1px solid #888888;
+    cursor: pointer;
+    z-index: 100;
   }
 </style>
 </head>
 <body>
 
-<h1>Circle of Fifths Quiz</h1>
+<div class="top-bar">
+  <h1>Circle of Fifths Quiz</h1>
+  <button type="button" id="themeToggle" class="theme-toggle"
+          aria-label="Toggle dark theme" title="Toggle dark theme"></button>
+</div>
 
 <p>Selected root note (from Circle of Fifths): <strong id="root"></strong></p>
 
@@ -170,6 +220,24 @@ document.getElementById("help-toggle").addEventListener("click", function () {
 });
 
 newQuestion();
+</script>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var toggle = document.getElementById("themeToggle");
+  try {
+    if (localStorage.getItem("fifths-theme") === "dark") {
+      root.classList.add("theme-dark");
+    }
+  } catch (e) {}
+  toggle.addEventListener("click", function () {
+    var dark = root.classList.toggle("theme-dark");
+    try {
+      localStorage.setItem("fifths-theme", dark ? "dark" : "light");
+    } catch (e) {}
+  });
+})();
 </script>
 
 </body>
