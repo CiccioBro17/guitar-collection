@@ -114,7 +114,7 @@
 
   <button type="submit">Check answers</button>
   <button type="button" id="new-question">New question</button>
-  <button type="button" id="help-toggle">Show help</button>
+  <button type="button" id="help-toggle">Show circle</button>
 </form>
 
 <img id="fifths-image" src="Circle-of-Fifths.jpg" alt="Circle of Fifths"
@@ -216,7 +216,7 @@ document.getElementById("help-toggle").addEventListener("click", function () {
   var img = document.getElementById("fifths-image");
   var hidden = img.style.display === "none";
   img.style.display = hidden ? "block" : "none";
-  this.textContent = hidden ? "Hide help" : "Show help";
+  this.textContent = hidden ? "Hide circle" : "Show circle";
 });
 
 newQuestion();

@@ -1862,47 +1862,91 @@ function loadState() {
             activeVoices = [];
         }
 
+        // Synthesize a steel-string acoustic pluck: bright pick attack, strong
+        // upper harmonics, and a quick natural decay.
+        function schedulePluck(freq, startTime, duration, level) {
+            const ctx = audioCtx;
+            const filter = ctx.createBiquadFilter();
+            const peak = ctx.createBiquadFilter();
+            const gain = ctx.createGain();
+            const oscillators = [];
+
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(Math.min(freq * 12, 14000), startTime);
+            filter.frequency.exponentialRampToValueAtTime(
+                Math.min(Math.max(freq * 4, 400), 8000),
+                startTime + duration * 0.7
+            );
+            filter.Q.value = 0.7;
+
+            // Gentle boost around 2.8 kHz for the metallic bronze shimmer.
+            peak.type = 'peaking';
+            peak.frequency.setValueAtTime(2800, startTime);
+            peak.Q.value = 1;
+            peak.gain.setValueAtTime(5, startTime);
+
+            const partials = [
+                { type: 'triangle', ratio: 1, gain: 0.8, detune: 0 },
+                { type: 'sawtooth', ratio: 1, gain: 0.12, detune: 5 },
+                { type: 'sine', ratio: 2, gain: 0.22, detune: 2 },
+                { type: 'sine', ratio: 3, gain: 0.1, detune: -3 },
+                { type: 'sine', ratio: 4, gain: 0.05, detune: 4 }
+            ];
+
+            partials.forEach(function (partial) {
+                const osc = ctx.createOscillator();
+                const partialGain = ctx.createGain();
+                osc.type = partial.type;
+                osc.frequency.setValueAtTime(freq * partial.ratio, startTime);
+                osc.detune.setValueAtTime(partial.detune, startTime);
+                partialGain.gain.value = partial.gain;
+                osc.connect(partialGain);
+                partialGain.connect(filter);
+                oscillators.push(osc);
+            });
+
+            gain.gain.setValueAtTime(0.0001, startTime);
+            gain.gain.exponentialRampToValueAtTime(level, startTime + 0.004);
+            gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+            filter.connect(peak);
+            peak.connect(gain);
+            gain.connect(masterGain);
+
+            oscillators.forEach(function (osc) {
+                osc.start(startTime);
+                osc.stop(startTime + duration + 0.05);
+            });
+
+            // Short filtered noise burst for the pick attack.
+            const noiseLength = Math.floor(ctx.sampleRate * 0.03);
+            const noiseBuffer = ctx.createBuffer(1, noiseLength, ctx.sampleRate);
+            const noiseData = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < noiseLength; i++) {
+                noiseData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / noiseLength, 4);
+            }
+            const noise = ctx.createBufferSource();
+            const noiseFilter = ctx.createBiquadFilter();
+            const noiseGain = ctx.createGain();
+            noise.buffer = noiseBuffer;
+            noiseFilter.type = 'highpass';
+            noiseFilter.frequency.setValueAtTime(2200, startTime);
+            noiseGain.gain.setValueAtTime(level * 0.35, startTime);
+            noise.connect(noiseFilter);
+            noiseFilter.connect(noiseGain);
+            noiseGain.connect(masterGain);
+            noise.start(startTime);
+
+            return { gain, oscillators };
+        }
+
         // Play a short single note so the player hears the pitch they clicked.
         function playSingleNote(midi) {
             const ctx = initAudio();
             if (!ctx || !masterGain) return;
 
-            const now = ctx.currentTime;
             const freq = referenceA4 * Math.pow(2, (midi - 69) / 12);
-            const endTime = now + 0.9;
-
-            const osc = ctx.createOscillator();
-            const harmonic = ctx.createOscillator();
-            const harmonicGain = ctx.createGain();
-            const filter = ctx.createBiquadFilter();
-            const gain = ctx.createGain();
-
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(freq, now);
-
-            harmonic.type = 'sine';
-            harmonic.frequency.setValueAtTime(freq * 2, now);
-            harmonic.detune.setValueAtTime(4, now);
-            harmonicGain.gain.value = 0.16;
-
-            filter.type = 'lowpass';
-            filter.frequency.setValueAtTime(Math.min(freq * 6, 9000), now);
-            filter.Q.value = 0.6;
-
-            gain.gain.setValueAtTime(0.0001, now);
-            gain.gain.exponentialRampToValueAtTime(0.12, now + 0.012);
-            gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
-
-            osc.connect(filter);
-            harmonic.connect(harmonicGain);
-            harmonicGain.connect(filter);
-            filter.connect(gain);
-            gain.connect(masterGain);
-
-            osc.start(now);
-            harmonic.start(now);
-            osc.stop(endTime + 0.05);
-            harmonic.stop(endTime + 0.05);
+            schedulePluck(freq, ctx.currentTime, 1.2, 0.1);
         }
 
         function playAudioChord() {
@@ -1920,48 +1964,13 @@ function loadState() {
             const now = ctx.currentTime;
 
             activeMidis.forEach((midi, index) => {
-                // Convert MIDI pitch to Hz using the selected A4 reference
                 const freq = referenceA4 * Math.pow(2, (midi - 69) / 12);
 
                 // Stagger the notes low to high for a strummed feel.
                 const delay = index * 0.045;
                 const startTime = now + delay;
-                const endTime = startTime + 2.0;
 
-                const osc = ctx.createOscillator();
-                const harmonic = ctx.createOscillator();
-                const harmonicGain = ctx.createGain();
-                const filter = ctx.createBiquadFilter();
-                const gain = ctx.createGain();
-
-                osc.type = 'triangle'; // Warm body
-                osc.frequency.setValueAtTime(freq, startTime);
-
-                harmonic.type = 'sine'; // Quiet second harmonic for definition
-                harmonic.frequency.setValueAtTime(freq * 2, startTime);
-                harmonic.detune.setValueAtTime(4, startTime);
-                harmonicGain.gain.value = 0.16;
-
-                filter.type = 'lowpass';
-                filter.frequency.setValueAtTime(Math.min(freq * 6, 9000), startTime);
-                filter.Q.value = 0.6;
-
-                gain.gain.setValueAtTime(0.0001, startTime);
-                gain.gain.exponentialRampToValueAtTime(0.14, startTime + 0.012);
-                gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
-
-                osc.connect(filter);
-                harmonic.connect(harmonicGain);
-                harmonicGain.connect(filter);
-                filter.connect(gain);
-                gain.connect(masterGain);
-
-                osc.start(startTime);
-                harmonic.start(startTime);
-                osc.stop(endTime + 0.05);
-                harmonic.stop(endTime + 0.05);
-
-                activeVoices.push({ gain, oscillators: [osc, harmonic] });
+                activeVoices.push(schedulePluck(freq, startTime, 1.9, 0.11));
             });
         }
 

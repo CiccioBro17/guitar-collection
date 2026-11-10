@@ -1,4 +1,4 @@
-const CACHE = 'g2p-v1';
+const CACHE = 'g2p-v4';
 const ASSETS = [
     './',
     './index.html',
