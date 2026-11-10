@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fake Guitar Pedal</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header-row">
+            <input type="checkbox" id="effects-switch" checked>
+            <label for="effects-switch" class="switch" title="Effects"></label>
+            <h1>Play and Hear yourself with effects</h1>
+            <span class="header-balance"></span>
+        </div>
+        <div class="selector">
+            <label for="mic-select">Microphone</label>
+            <select id="mic-select">
+                <option disabled selected>Select a microphone</option>
+            </select>
+        </div>
+        <div class="meter">
+            <div class="meter-bar" id="meter-bar"></div>
+        </div>
+        <div class="knobs">
+            <div class="knob">
+                <div class="knob-dial" data-value="50" data-type="bass"></div>
+                <input type="range" min="0" max="100" value="50" id="bass" class="knob-slider">
+                <label>Bass</label>
+                <span class="knob-value" data-for="bass">0 dB</span>
+            </div>
+            <div class="knob">
+                <div class="knob-dial" data-value="50" data-type="mid"></div>
+                <input type="range" min="0" max="100" value="50" id="mid" class="knob-slider">
+                <label>Mid</label>
+                <span class="knob-value" data-for="mid">0 dB</span>
+            </div>
+            <div class="knob">
+                <div class="knob-dial" data-value="50" data-type="treble"></div>
+                <input type="range" min="0" max="100" value="50" id="treble" class="knob-slider">
+                <label>Treble</label>
+                <span class="knob-value" data-for="treble">0 dB</span>
+            </div>
+            <div class="knob">
+                <div class="knob-dial" data-value="70" data-type="volume"></div>
+                <input type="range" min="0" max="200" value="70" id="volume" class="knob-slider">
+                <label>Volume</label>
+                <span class="knob-value" data-for="volume">35x</span>
+            </div>
+            <div class="knob">
+                <div class="knob-dial" data-value="50" data-type="pitch"></div>
+                <input type="range" min="0" max="100" value="50" id="pitch" class="knob-slider">
+                <label>Pitch</label>
+                <span class="knob-value" data-for="pitch">0 st</span>
+            </div>
+        </div>
+        <div class="record-section">
+            <input type="checkbox" id="track-switch" checked>
+            <label for="track-switch" class="switch" title="Record mode: On = effects + dry tracks, Off = effects only"></label>
+            <button id="record-btn" disabled>Record</button>
+            <span class="rec-feedback">
+                <span id="rec-indicator"></span>
+                <span id="rec-time"></span>
+            </span>
+        </div>
+    </div>
+    <script src="jungle.js"></script>
+    <script src="script.js"></script>
+    <div class="badge" id="badge"></div>
+</body>
+</html>

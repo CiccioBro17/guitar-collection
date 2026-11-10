@@ -1,0 +1,1808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Interactive guitar fretboard analyzer that identifies chords in real time and mirrors the exact pitches on a piano keyboard.">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="color-scheme" content="dark">
+    <title>Guitar-to-Piano Chord Analyzer & Voicing Calculator</title>
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #0f172a;
+            --card-bg: #1e293b;
+            --accent-primary: #38bdf8;
+            --accent-secondary: #a855f7;
+            --accent-rose: #f43f5e;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-main);
+            color: #f8fafc;
+        }
+
+        /* Only the interactive instruments should block text selection */
+        #fretboard,
+        #pianoKeyboard {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .font-mono-code {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        /* Fretboard Layout Styles */
+        .fretboard-container {
+            overflow-x: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #334155 #0f172a;
+        }
+
+        .fret-marker-dot {
+            width: 10px;
+            height: 10px;
+            background-color: #475569;
+            border-radius: 50%;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .string-wire {
+            position: absolute;
+            /* Start after the string control (56px) + its gap (8px) */
+            left: 64px;
+            right: 0;
+            background: linear-gradient(180deg, #94a3b8 0%, #64748b 50%, #475569 100%);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.6);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .fret-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(90deg, #cbd5e1 0%, #94a3b8 50%, #64748b 100%);
+            box-shadow: 1px 0 2px rgba(0,0,0,0.5);
+            z-index: 2;
+        }
+
+        .nut-line {
+            width: 8px;
+            background: linear-gradient(90deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%);
+            box-shadow: 2px 0 5px rgba(0,0,0,0.8);
+            border-radius: 2px;
+        }
+
+        /* Note marker on fretboard */
+        .note-dot {
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 10;
+        }
+        .note-dot:hover {
+            transform: scale(1.15);
+        }
+
+        /* Piano Keys Styling */
+        .piano-key-white {
+            position: relative;
+            height: 100%;
+            background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 85%, #cbd5e1 100%);
+            border: 1px solid #94a3b8;
+            border-bottom-left-radius: 6px;
+            border-bottom-right-radius: 6px;
+            box-shadow: inset 0 -2px 5px rgba(0,0,0,0.15);
+            transition: background 0.1s, transform 0.05s, box-shadow 0.1s;
+        }
+        .piano-key-black {
+            position: absolute;
+            top: 0;
+            height: 62%;
+            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+            border: 1px solid #020617;
+            border-bottom-left-radius: 4px;
+            border-bottom-right-radius: 4px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.5);
+            transition: background 0.1s, transform 0.05s;
+            z-index: 5;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.001ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.001ms !important;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-3 sm:p-5 gap-5">
+
+    <noscript>
+        <p class="bg-rose-500/20 border border-rose-500/40 text-rose-200 text-sm rounded-xl p-3 mb-3">
+            This chord analyzer needs JavaScript enabled to render the fretboard and run the music theory engine.
+        </p>
+    </noscript>
+
+    <!-- HEADER / NAVIGATION BAR -->
+    <header class="flex flex-col md:flex-row items-center justify-between bg-slate-800/80 backdrop-blur-md border border-slate-700/60 p-4 rounded-2xl shadow-xl gap-4">
+        <div class="flex items-center gap-3">
+            <div class="p-2.5 bg-gradient-to-br from-sky-500 to-indigo-600 rounded-xl shadow-lg shadow-sky-500/20 text-white" aria-hidden="true">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold bg-gradient-to-r from-sky-400 via-purple-300 to-indigo-300 bg-clip-text text-transparent">
+                    Guitar-to-Piano Chord Analyzer
+                </h1>
+                <p class="text-xs text-slate-400 font-medium">Real-Time Voicing Calculator & Theory Engine</p>
+            </div>
+        </div>
+
+        <!-- CONTROLS -->
+        <div class="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+            <!-- Concert Pitch / A4 Tuning -->
+            <div class="flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 shrink-0" title="Reference pitch for A4. Raises or lowers every note equally.">
+                <button
+                    type="button"
+                    id="a4Reset"
+                    class="w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center border border-slate-600 text-slate-400 hover:text-sky-400 hover:border-sky-500 transition focus-visible:ring-2 focus-visible:ring-sky-400"
+                    title="Reset A4 to 440 Hz"
+                    aria-label="Reset reference pitch to 440 hertz"
+                >R</button>
+                <input
+                    id="a4Tuning"
+                    type="range"
+                    min="410"
+                    max="460"
+                    step="1"
+                    value="440"
+                    aria-label="Reference pitch for A4 in hertz"
+                    class="w-24 sm:w-32 accent-sky-500 cursor-pointer"
+                >
+                <output id="a4TuningValue" for="a4Tuning" class="text-[11px] font-mono font-bold text-sky-400 w-12 text-right whitespace-nowrap">440 Hz</output>
+            </div>
+
+            <!-- Capo Control -->
+            <div class="flex items-center gap-2 px-2">
+                <label class="text-[11px] font-mono text-slate-400 whitespace-nowrap">Capo</label>
+                <input
+                    id="capoFret"
+                    type="range"
+                    min="0"
+                    max="12"
+                    step="1"
+                    value="0"
+                    aria-label="Capo fret position"
+                    class="w-20 sm:w-24 accent-rose-500 cursor-pointer"
+                >
+                <output id="capoFretValue" for="capoFret" class="text-[11px] font-mono font-bold text-rose-400 w-10 text-right whitespace-nowrap">0</output>
+            </div>
+
+            <!-- Tuning Preset Selector -->
+            <div class="flex items-center gap-2 px-2">
+                <label class="text-[11px] font-mono text-slate-400 whitespace-nowrap">Tuning</label>
+                <select id="tuningPreset" class="text-xs bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 focus-visible:ring-2 focus-visible:ring-sky-400 cursor-pointer">
+                    <!-- Options populated by JS -->
+                </select>
+            </div>
+
+            <!-- Clear Button -->
+            <button type="button" onclick="clearFretboard()" class="px-3 py-2 bg-slate-700/60 hover:bg-slate-700 border border-slate-600/60 text-xs sm:text-sm font-semibold rounded-xl transition text-slate-300 flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-sky-400">
+                <svg class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                Clear
+            </button>
+
+            <!-- Audio Playback Buttons -->
+            <button type="button" onclick="playAudioChord()" class="px-3.5 py-2 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white text-xs sm:text-sm font-semibold rounded-xl transition shadow-lg shadow-sky-500/25 flex items-center gap-1.5 active:scale-95 focus-visible:ring-2 focus-visible:ring-sky-300">
+                <svg class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Strum
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN DASHBOARD CONTENT (GRID 2-COLUMNS ON DESKTOP) -->
+    <main class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start flex-1">
+        
+        <!-- ZONE A: GUITAR FRETBOARD INTERACTION PANEL (LG: 7 COLS) -->
+        <section class="lg:col-span-7 bg-slate-800/80 backdrop-blur-md border border-slate-700/60 p-4 sm:p-5 rounded-2xl shadow-xl flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-slate-700/60 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-sky-400 inline-block" aria-hidden="true"></span>
+                    <h2 class="text-base font-bold text-slate-100">Interactive Fretboard</h2>
+                    <span class="text-xs text-slate-400 font-mono">Standard Tuning</span>
+                </div>
+                <div class="text-xs text-slate-400 hidden sm:block">
+                    Click frets or use arrow keys • Click the string note to play it open
+                </div>
+            </div>
+
+            <!-- Fretboard Horizontal Scroll Area (labels scroll with the neck) -->
+            <div class="fretboard-container py-2 flex flex-col">
+                <div id="fretboard" role="group" aria-label="24-fret guitar fretboard, standard tuning, string 1 high E at the top down to string 6 low E at the bottom" class="relative bg-slate-900 border border-slate-950 rounded-xl min-w-[1100px] p-3 shadow-inner">
+                    <!-- Dynamic rendering will build strings, frets, nut, and markers here -->
+                </div>
+                <div id="fretLabels" aria-hidden="true" class="flex items-center min-w-[1100px] p-3 border border-transparent text-[11px] font-mono font-bold text-slate-400">
+                    <!-- Only the marked frets (3, 5, 7, 9, 12, 15, 17, 19) are labeled -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ZONE B: LIVE CHORD ANALYSIS PANEL (LG: 5 COLS) -->
+        <section class="lg:col-span-5 bg-slate-800/80 backdrop-blur-md border border-slate-700/60 p-5 rounded-2xl shadow-xl flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-slate-700/60 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-purple-400 inline-block" aria-hidden="true"></span>
+                    <h2 class="text-base font-bold text-slate-100">Chord Analysis & Theory</h2>
+                </div>
+                <span id="activeNoteCountBadge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-700 text-slate-300">
+                    0 notes active
+                </span>
+            </div>
+
+            <!-- PRIMARY MATCH CARD -->
+            <div class="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-700/80 p-4 rounded-xl flex flex-col gap-2 relative overflow-hidden">
+                <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">Primary Identification</div>
+                
+                <div class="flex items-baseline justify-between gap-2">
+                    <div id="primaryChordName" class="text-3xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-indigo-300 to-purple-400 tracking-tight">
+                        --
+                    </div>
+                    <div id="slashChordBadge" class="hidden text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300">
+                        Inversion / Slash
+                    </div>
+                </div>
+
+                <div id="chordFormulaDescription" class="text-xs text-slate-300 font-medium leading-relaxed">
+                    Select frets on the guitar neck to analyze chord formulas.
+                </div>
+            </div>
+
+            <!-- Screen-reader announcement for live chord changes -->
+            <div id="analysisLiveRegion" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+
+            <!-- OMISSIONS & STATUS BADGES CONTAINER -->
+            <div id="badgesContainer" class="flex flex-wrap gap-2 min-h-[32px]">
+                <!-- Dynamic Badges will appear here -->
+            </div>
+
+            <!-- ALTERNATIVE INTERPRETATIONS & INTERVAL BREAKDOWN -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                <!-- Alternative Interpretations -->
+                <div class="bg-slate-900/80 border border-slate-700/50 p-3 rounded-xl flex flex-col gap-2">
+                    <div class="text-xs font-semibold text-slate-400 flex items-center justify-between">
+                        <span>Other Logical Names</span>
+                        <span class="text-[10px] text-slate-500">Ranked</span>
+                    </div>
+                    <ul id="alternativeChordsList" class="text-xs text-slate-300 space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                        <li class="text-slate-500 italic">No alternative matches yet</li>
+                    </ul>
+                </div>
+
+                <!-- Active Intervals List -->
+                <div class="bg-slate-900/80 border border-slate-700/50 p-3 rounded-xl flex flex-col gap-2">
+                    <div class="text-xs font-semibold text-slate-400 flex items-center justify-between">
+                        <span>Pitches & Intervals</span>
+                        <span id="rootNoteLabel" class="text-[10px] text-sky-400 font-bold">Root: -</span>
+                    </div>
+                    <div id="intervalTable" class="text-xs space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                        <span class="text-slate-500 italic">No notes active</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ZONE C: INTERACTIVE PIANO KEYBOARD MIRROR -->
+    <section aria-labelledby="pianoHeading" class="bg-slate-800/80 backdrop-blur-md border border-slate-700/60 p-4 sm:p-5 rounded-2xl shadow-xl flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-rose-400 inline-block" aria-hidden="true"></span>
+                <h2 id="pianoHeading" class="text-base font-bold text-slate-100">Piano Keyboard Mirror</h2>
+                <span class="text-xs text-slate-400 hidden sm:inline">(Exact Octaves E2 to E6)</span>
+            </div>
+            
+            <!-- Color Legend -->
+            <div class="flex items-center gap-3 text-xs text-slate-300">
+                <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-sm shadow-purple-500" aria-hidden="true"></span>
+                    <span>Root</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-sky-400 shadow-sm shadow-sky-400" aria-hidden="true"></span>
+                    <span>3rd / 5th / 7th</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm shadow-amber-400" aria-hidden="true"></span>
+                    <span>Extensions</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Piano Container -->
+        <div class="overflow-x-auto pb-1">
+            <div id="pianoKeyboard" role="img" aria-label="Piano keyboard showing notes from E2 to E6" class="relative h-36 min-w-[1000px] bg-slate-950 p-2 rounded-xl border border-slate-900 select-none overflow-hidden">
+                <div id="pianoKeys" class="relative flex h-full w-full">
+                    <!-- Dynamic Piano keys rendered via JavaScript -->
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- JAVASCRIPT ARCHITECTURE & MUSIC THEORY ENGINE -->
+    <script>
+        /**
+         * MUSIC THEORY DATA & CONSTANTS
+         */
+        const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const FLAT_NOTE_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+
+// Standard Guitar Tuning strings (Low to High: E2, A2, D3, G3, B3, E4)
+let GUITAR_STRINGS = [
+    { name: 'E2', midi: 40, gauge: 3.5 }, // String 6 (Low E)
+    { name: 'A2', midi: 45, gauge: 3.0 }, // String 5
+    { name: 'D3', midi: 50, gauge: 2.4 }, // String 4
+    { name: 'G3', midi: 55, gauge: 1.8 }, // String 3
+    { name: 'B3', midi: 59, gauge: 1.4 }, // String 2
+    { name: 'E4', midi: 64, gauge: 1.0 }  // String 1 (High E)
+];
+
+// Capo position (0 = no capo). Shifts all notes up by this many semitones.
+let capoFret = 0;
+let prevCapoFret = 0;
+
+// Fingering suggestion per string (1=index, 2=middle, 3=ring, 4=pinky, 0=none)
+let stringFingerings = new Array(6).fill(0);
+
+// Tuning presets (MIDI values low-to-high: string 6 → string 1)
+const TUNING_PRESETS = [
+    { name: 'Standard', strings: [40, 45, 50, 55, 59, 64] },
+    { name: 'Drop D', strings: [38, 45, 50, 55, 59, 64] },
+    { name: 'Drop C', strings: [36, 43, 48, 53, 57, 62] },
+    { name: 'Open G', strings: [38, 43, 50, 55, 59, 64] },
+    { name: 'Open D', strings: [38, 43, 48, 53, 58, 62] },
+    { name: 'DADGAD', strings: [38, 45, 50, 57, 62, 64] },
+    { name: 'Half Step Down', strings: [39, 44, 49, 54, 58, 63] },
+    { name: 'Whole Step Down', strings: [38, 43, 48, 53, 57, 62] }
+];
+
+// State Array: 6 strings. Each string has: status ('open' | 'fretted' | 'muted'), fret: number (0..24)
+let fretboardState = [
+    { status: 'muted', fret: 0 },
+    { status: 'muted', fret: 0 },
+    { status: 'muted', fret: 0 },
+    { status: 'muted', fret: 0 },
+    { status: 'muted', fret: 0 },
+    { status: 'muted', fret: 0 }
+];
+
+// Interval role per string index (R, b3, 5, b7, etc.) relative to detected chord root
+let stringIntervalLabels = new Array(6).fill('');
+
+// Active root: null means the top-ranked match; any other value is the
+// rootPC the user clicked. All logical names are equal peers — clicking one
+// makes it the active root and every interval label re-derives from it.
+let activeRootPC = null;
+
+// Root PC of the currently displayed match (used for interval color-coding).
+let currentRootPC = null;
+
+function setRoot(rootPC) {
+    activeRootPC = rootPC;
+    analyzeCurrentChord();
+    updateFretboardUI();
+    saveState();
+}
+
+/**
+ * FINGERING SUGGESTIONS
+ * Assigns finger numbers (1=index, 2=middle, 3=ring, 4=pinky) to fretted strings.
+ * Heuristic: lowest fretted string gets index, ascending frets get ascending fingers.
+ * Open strings and muted strings get 0 (no suggestion).
+ */
+function computeFingerings() {
+    stringFingerings.fill(0);
+
+    // Collect fretted (non-open, non-muted) strings with their frets
+    const fretted = [];
+    fretboardState.forEach((state, strIdx) => {
+        if (state.status === 'fretted') {
+            fretted.push({ strIdx, fret: state.fret });
+        }
+    });
+
+    // Sort by fret ascending (lowest fret = index finger)
+    fretted.sort((a, b) => a.fret - b.fret || a.strIdx - b.strIdx);
+
+    fretted.forEach((entry, i) => {
+        stringFingerings[entry.strIdx] = Math.min(i + 1, 4); // cap at 4 (pinky)
+    });
+}
+
+/**
+ * STATE PERSISTENCE (localStorage)
+ * Saves and restores fretboard state, capo, tuning, root, and A4 reference.
+ */
+const STORAGE_KEY = 'guitar2piano_v1';
+
+function saveState() {
+    try {
+        const state = {
+            fretboardState,
+            activeRootPC,
+            capoFret,
+            prevCapoFret,
+            referenceA4,
+            GUITAR_STRINGS: GUITAR_STRINGS.map(s => s.midi)
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+        // localStorage may be blocked in private mode — fail silently.
+    }
+}
+
+function loadState() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return false;
+        const state = JSON.parse(raw);
+
+        // Restore fretboard state
+        if (Array.isArray(state.fretboardState) && state.fretboardState.length === 6) {
+            fretboardState = state.fretboardState.map((s, i) => ({
+                status: s.status || 'muted',
+                fret: typeof s.fret === 'number' ? s.fret : 0
+            }));
+        }
+
+        // Restore active root
+        if (typeof state.activeRootPC === 'number') activeRootPC = state.activeRootPC;
+
+        // Restore capo
+        if (typeof state.capoFret === 'number') capoFret = Math.max(0, Math.min(24, state.capoFret));
+        if (typeof state.prevCapoFret === 'number') prevCapoFret = Math.max(0, Math.min(24, state.prevCapoFret));
+
+        // Restore A4
+        if (typeof state.referenceA4 === 'number') referenceA4 = Math.max(410, Math.min(460, state.referenceA4));
+
+        // Restore custom tuning
+        if (Array.isArray(state.GUITAR_STRINGS) && state.GUITAR_STRINGS.length === 6) {
+            const midis = state.GUITAR_STRINGS;
+            GUITAR_STRINGS = midis.map((midi, i) => {
+                const info = getNoteNameFromMidi(midi);
+                return { name: info.name + info.octave, midi, gauge: GUITAR_STRINGS[i]?.gauge || 2.0 };
+            });
+        }
+
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+        /**
+         * GENERATIVE CHORD NAMING
+         * Instead of matching a fixed list, derive a chord symbol from the
+         * interval structure relative to each candidate root. This is the same
+         * model Oolimo uses: triad quality + suspension + extension + tensions
+         * + added tones + omitted tones.
+         */
+        const DEGREE_LABELS = {
+            0: '1',
+            1: 'b9',
+            2: '9',
+            3: 'b3',
+            4: '3',
+            5: '11',
+            6: 'b5',
+            7: '5',
+            8: '#5',
+            9: '6',
+            10: 'b7',
+            11: '7'
+        };
+
+        // Map semitone relative intervals to readable theoretical names
+        const INTERVAL_NAMES = {
+            0: 'Root',
+            1: 'm2 / b9',
+            2: 'M2 / 9th',
+            3: 'm3 / Minor 3rd',
+            4: 'M3 / Major 3rd',
+            5: 'P4 / 11th',
+            6: 'b5 / #11',
+            7: 'P5 / Perfect 5th',
+            8: '#5 / b13',
+            9: 'M6 / 13th',
+            10: 'b7 / Minor 7th',
+            11: 'M7 / Major 7th'
+        };
+
+        /**
+         * DOM ELEMENT CACHES & INITIALIZATION
+         */
+        const fretCellElements = []; // [stringIndex][fret]
+        const noteDotElements = [];  // [stringIndex][fret]
+        const intervalLabelElements = []; // [stringIndex] -> interval label span
+        const whiteKeyElements = new Map(); // MIDI -> element
+        const blackKeyElements = new Map(); // MIDI -> element
+        const BLACK_PITCH_CLASSES = new Set([1, 3, 6, 8, 10]);
+        const PIANO_START_MIDI = 40; // E2
+        const PIANO_END_MIDI = 88;   // E6
+        const MAX_FRET = 24;
+        const INLAY_FRETS = new Set([3, 5, 7, 9, 12, 15, 17, 19]);
+
+        // Concert pitch reference. Note names stay the same; every frequency
+        // is scaled relative to this A4 value.
+        let referenceA4 = 440;
+        const WHITE_KEY_CLASS = 'piano-key-white flex-1 flex flex-col justify-end items-center pb-1 text-[10px] font-bold text-slate-600';
+        const BLACK_KEY_CLASS = 'piano-key-black flex flex-col justify-end items-center pb-1 text-[9px] font-bold text-slate-400';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadState();
+            buildFretboardUI();
+            buildFretLabels();
+            buildPianoUI();
+            setupFretboardEvents();
+            setupTuningControl();
+            setupCapoControl();
+            setupTuningPresetControl();
+            analyzeCurrentChord();
+            updateFretboardUI();
+        });
+
+        function setupTuningControl() {
+            const tuningInput = document.getElementById('a4Tuning');
+            const tuningValue = document.getElementById('a4TuningValue');
+            const resetBtn = document.getElementById('a4Reset');
+
+            function applyReference(value) {
+                referenceA4 = value;
+                tuningInput.value = String(value);
+                tuningValue.textContent = `${value} Hz`;
+            }
+
+            tuningInput.addEventListener('input', () => {
+                applyReference(Number(tuningInput.value));
+                saveState();
+            });
+
+            resetBtn.addEventListener('click', () => {
+                applyReference(440);
+                saveState();
+            });
+        }
+
+        function setupCapoControl() {
+            const input = document.getElementById('capoFret');
+            const output = document.getElementById('capoFretValue');
+
+            function applyCapo(value) {
+                const delta = value - prevCapoFret;
+
+                // Shift existing fretted notes together with the capo so they
+                // stay at the same distance from it. Open notes stay open.
+                if (delta !== 0) {
+                    fretboardState = fretboardState.map(state => {
+                        if (state.status === 'fretted') {
+                            const rawFret = state.fret + delta;
+                            if (rawFret < 1) {
+                                // Would fall before the nut — mute it.
+                                return { status: 'muted', fret: 0 };
+                            }
+                            return { status: 'fretted', fret: Math.min(MAX_FRET, rawFret) };
+                        }
+                        return state;
+                    });
+                }
+
+                capoFret = value;
+                prevCapoFret = value;
+                input.value = String(value);
+                output.textContent = value === 0 ? 'Off' : value;
+                // Refresh UI so open-note circles show the capo-shifted note names
+                // and the fretboard shows the capo visual zone.
+                buildFretboardUI();
+                buildFretLabels();
+                analyzeCurrentChord();
+                updateFretboardUI();
+                saveState();
+            }
+
+            input.addEventListener('input', () => applyCapo(Number(input.value)));
+        }
+
+        function setupTuningPresetControl() {
+            const select = document.getElementById('tuningPreset');
+
+            // Populate options
+            TUNING_PRESETS.forEach((preset, idx) => {
+                const option = document.createElement('option');
+                option.value = idx;
+                option.textContent = preset.name;
+                select.appendChild(option);
+            });
+
+            select.addEventListener('change', () => {
+                const idx = Number(select.value);
+                const preset = TUNING_PRESETS[idx];
+                if (!preset) return;
+
+                // Apply tuning: GUITAR_STRINGS is low-to-high (string 6 → string 1)
+                const midis = preset.strings;
+                GUITAR_STRINGS = midis.map((midi, i) => {
+                    const info = getNoteNameFromMidi(midi);
+                    return { name: info.name + info.octave, midi, gauge: 2.0 };
+                });
+
+                // Rebuild fretboard with new tuning
+                buildFretboardUI();
+                analyzeCurrentChord();
+                updateFretboardUI();
+                saveState();
+            });
+        }
+
+        function setupFretboardEvents() {
+            const fretboard = document.getElementById('fretboard');
+
+            // Event delegation: one click listener for every note cell.
+            fretboard.addEventListener('click', (event) => {
+                const cell = event.target.closest('[data-fret]');
+                if (!cell || !fretboard.contains(cell)) return;
+                selectFret(Number(cell.dataset.string), Number(cell.dataset.fret));
+            });
+
+            // Arrow-key navigation across the fretboard grid.
+            fretboard.addEventListener('keydown', (event) => {
+                const cell = event.target.closest('[data-fret]');
+                if (!cell) return;
+
+                const stringIdx = Number(cell.dataset.string);
+                const fret = Number(cell.dataset.fret);
+                let nextString = stringIdx;
+                let nextFret = fret;
+
+                // Capo-aware minimum fret: first fret at or after the capo.
+                const minFret = capoFret > 0 ? capoFret : 1;
+
+                switch (event.key) {
+                    case 'ArrowLeft': nextFret = Math.max(minFret, fret - 1); break;
+                    case 'ArrowRight': nextFret = Math.min(MAX_FRET, fret + 1); break;
+                    // Strings are displayed high E → low E, so moving up increases the index.
+                    case 'ArrowUp': nextString = Math.min(5, stringIdx + 1); break;
+                    case 'ArrowDown': nextString = Math.max(0, stringIdx - 1); break;
+                    case 'Home': nextFret = minFret; break;
+                    case 'End': nextFret = MAX_FRET; break;
+                    default: return;
+                }
+
+                event.preventDefault();
+                const nextCell = fretboard.querySelector(`[data-string="${nextString}"][data-fret="${nextFret}"]`);
+                if (nextCell) nextCell.focus();
+            });
+
+            // Roving tabindex keeps the whole grid to a single tab stop.
+            fretboard.addEventListener('focusin', (event) => {
+                const cell = event.target.closest('[data-fret]');
+                if (!cell) return;
+                fretboard.querySelectorAll('[data-fret]').forEach(c => { c.tabIndex = -1; });
+                cell.tabIndex = 0;
+            });
+        }
+
+        // Render Fretboard DOM
+        function buildFretboardUI() {
+            const container = document.getElementById('fretboard');
+            container.innerHTML = '';
+            fretCellElements.length = 0;
+            noteDotElements.length = 0;
+            intervalLabelElements.length = 0;
+
+            // Render high E (string 1) at the top and low E (string 6) at the bottom.
+            for (let displayRow = 0; displayRow < GUITAR_STRINGS.length; displayRow++) {
+                const strIdx = GUITAR_STRINGS.length - 1 - displayRow;
+                const strData = GUITAR_STRINGS[strIdx];
+                const stringRow = document.createElement('div');
+                stringRow.className = 'flex items-center h-10 relative my-1';
+
+                const stringNumber = 6 - strIdx;
+                const openNote = getNoteNameFromMidi(strData.midi + capoFret);
+
+                // Left open-string note control. It shows the tuning note and
+                // behaves like the open-string fret: click to play, click again to mute.
+                const openNoteWrap = document.createElement('div');
+                openNoteWrap.className = 'w-14 mr-2 flex items-center justify-center';
+
+                // Interval role label shown to the left of the open-note circle
+                // (R, b3, 5, b7, etc.) when the string is active in a detected chord.
+                const intervalLabelSpan = document.createElement('span');
+                intervalLabelSpan.id = `str-interval-${strIdx}`;
+                intervalLabelSpan.className = 'text-[10px] font-mono font-bold w-4 text-center opacity-0 transition-opacity duration-150';
+                intervalLabelSpan.setAttribute('aria-hidden', 'true');
+                intervalLabelElements[strIdx] = intervalLabelSpan;
+                stringRow.appendChild(intervalLabelSpan);
+
+                const openNoteBtn = document.createElement('button');
+                openNoteBtn.type = 'button';
+                openNoteBtn.id = `str-open-${strIdx}`;
+                openNoteBtn.className = 'w-9 h-9 rounded-full text-xs font-mono font-bold flex items-center justify-center transition border border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200 focus-visible:ring-2 focus-visible:ring-sky-400';
+                openNoteBtn.textContent = openNote.name;
+                openNoteBtn.title = `String ${stringNumber} — ${openNote.name}${openNote.octave}`;
+                openNoteBtn.onclick = () => selectFret(strIdx, 0);
+
+                openNoteWrap.appendChild(openNoteBtn);
+                stringRow.appendChild(openNoteWrap);
+
+                // Guitar Nut Separator
+                const nut = document.createElement('div');
+                nut.className = 'nut-line h-full mr-1';
+                nut.setAttribute('aria-hidden', 'true');
+                stringRow.appendChild(nut);
+
+                // String Wire representation across frets
+                const stringWire = document.createElement('div');
+                stringWire.className = 'string-wire';
+                stringWire.style.height = `${strData.gauge}px`;
+                stringWire.style.top = `calc(50% - ${strData.gauge / 2}px)`;
+                stringWire.setAttribute('aria-hidden', 'true');
+                stringRow.appendChild(stringWire);
+
+                const cellsForString = [];
+                const dotsForString = [];
+
+                // Frets 1 to 24. The open string is the circle before the nut.
+                for (let fret = 1; fret <= MAX_FRET; fret++) {
+                    const midiVal = strData.midi + capoFret + fret;
+                    const noteName = getNoteNameFromMidi(midiVal);
+
+                    // The whole fret cell is a real button so it supports
+                    // keyboard activation, focus rings, and aria-pressed.
+                    const fretCell = document.createElement('button');
+                    fretCell.type = 'button';
+                    fretCell.className = 'relative flex-1 h-full flex items-center justify-center cursor-pointer group bg-transparent border-0 p-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400';
+                    fretCell.dataset.string = strIdx;
+                    fretCell.dataset.fret = fret;
+
+                    // Capo-aware minimum fret for navigation and tab order.
+                    const minFret = capoFret > 0 ? capoFret : 1;
+                    fretCell.tabIndex = (strIdx === 5 && fret === minFret) ? 0 : -1;
+                    fretCell.setAttribute('aria-label', `String ${stringNumber}, fret ${fret}: ${noteName.name}${noteName.octave}`);
+                    fretCell.setAttribute('aria-pressed', 'false');
+
+                    fretCell.classList.add('border-r', 'border-slate-700/80');
+
+                // Single or double inlay dots on the middle string.
+                if (strIdx === 2 && INLAY_FRETS.has(fret) && fret !== 12) {
+                    const dot = document.createElement('div');
+                    dot.className = 'fret-marker-dot';
+                    dot.setAttribute('aria-hidden', 'true');
+                    fretCell.appendChild(dot);
+                } else if (strIdx === 2 && fret === 12) {
+                    const dot1 = document.createElement('div');
+                    dot1.className = 'fret-marker-dot';
+                    dot1.style.top = '25%';
+                    dot1.setAttribute('aria-hidden', 'true');
+                    const dot2 = document.createElement('div');
+                    dot2.className = 'fret-marker-dot';
+                    dot2.style.top = '75%';
+                    dot2.setAttribute('aria-hidden', 'true');
+                    fretCell.appendChild(dot1);
+                    fretCell.appendChild(dot2);
+                }
+
+                // Capo bar indicator aligned to the end (right side) of the capo fret cell,
+                // marking where the playable area starts.
+                if (capoFret > 0 && fret === capoFret) {
+                    const capoBar = document.createElement('div');
+                    capoBar.className = 'absolute inset-y-0 right-0 w-1 bg-rose-500/80 rounded-r-sm pointer-events-none';
+                    capoBar.setAttribute('aria-hidden', 'true');
+                    fretCell.appendChild(capoBar);
+                }
+
+                // Grey out frets before the capo — they are physically unplayable.
+                // Keep existing dots/notes even if they fall in this zone.
+                const isBeforeCapo = capoFret > 0 && fret < capoFret;
+                if (isBeforeCapo) {
+                    fretCell.classList.add('opacity-20', 'cursor-not-allowed', 'bg-slate-800/50');
+                    fretCell.setAttribute('aria-disabled', 'true');
+                    fretCell.tabIndex = -1;
+                }
+
+                const relativeFret = capoFret > 0 ? fret - capoFret : fret;
+                fretCell.setAttribute('aria-label', `String ${stringNumber}, ${isBeforeCapo ? 'before capo' : relativeFret === 0 ? 'capo position' : 'fret ' + relativeFret}: ${noteName.name}${noteName.octave}`);
+
+                // Visual note marker (the cell itself owns interaction)
+                const noteDot = document.createElement('span');
+                noteDot.id = `note-dot-${strIdx}-${fret}`;
+                noteDot.className = 'note-dot w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center shadow-lg transition opacity-0 group-hover:opacity-60 pointer-events-none';
+                noteDot.textContent = noteName.name;
+                noteDot.dataset.noteName = noteName.name;
+                noteDot.setAttribute('aria-hidden', 'true');
+
+                    fretCell.appendChild(noteDot);
+
+                    // Finger suggestion indicator (small number below the dot).
+                    const fingerSpan = document.createElement('span');
+                    fingerSpan.id = `finger-${strIdx}-${fret}`;
+                    fingerSpan.className = 'absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] font-bold text-sky-400 opacity-0 transition-opacity duration-150 pointer-events-none';
+                    fingerSpan.setAttribute('aria-hidden', 'true');
+                    fretCell.appendChild(fingerSpan);
+                    stringRow.appendChild(fretCell);
+                    // Index by fret number so fret N stays at [N]; index 0 is unused.
+                    cellsForString[fret] = fretCell;
+                    dotsForString[fret] = noteDot;
+                }
+
+                fretCellElements[strIdx] = cellsForString;
+                noteDotElements[strIdx] = dotsForString;
+                container.appendChild(stringRow);
+            }
+
+            updateFretboardUI();
+        }
+
+        // Build fret labels with the exact same horizontal structure as the neck.
+        function buildFretLabels() {
+            const labels = document.getElementById('fretLabels');
+            labels.innerHTML = '';
+
+            // Invisible spacers keep the labels aligned with the neck.
+            // Mirrors the string row structure: intervalLabelSpan(w-4) → openNoteWrap(w-14 mr-2) → nut(w-2 mr-1) → frets.
+            const intervalSpacer = document.createElement('span');
+            intervalSpacer.className = 'w-4';
+            labels.appendChild(intervalSpacer);
+
+            const stringSpacer = document.createElement('span');
+            stringSpacer.className = 'w-14 mr-2';
+            labels.appendChild(stringSpacer);
+
+            const nutSpacer = document.createElement('span');
+            nutSpacer.className = 'w-2 mr-1';
+            labels.appendChild(nutSpacer);
+
+            for (let fret = 1; fret <= MAX_FRET; fret++) {
+                const relativeFret = capoFret > 0 ? fret - capoFret : fret;
+                const isBeforeCapo = capoFret > 0 && fret < capoFret;
+                const relativeIsMarker = INLAY_FRETS.has(relativeFret);
+                const label = document.createElement('span');
+                label.className = `flex-1 flex items-center justify-center${relativeIsMarker ? ' text-sky-400' : ' text-slate-500/50'}`;
+                if (isBeforeCapo || relativeFret <= 0) {
+                    label.textContent = '';
+                } else if (relativeIsMarker) {
+                    label.textContent = String(relativeFret);
+                }
+                labels.appendChild(label);
+            }
+        }
+
+        // Render Piano Keyboard DOM (E2 to E6)
+        function buildPianoUI() {
+            const piano = document.getElementById('pianoKeys');
+            piano.innerHTML = '';
+            whiteKeyElements.clear();
+            blackKeyElements.clear();
+
+            // White keys share the available width; black keys are absolutely
+            // positioned over the boundaries between adjacent white keys.
+            let whiteTotal = 0;
+            for (let midi = PIANO_START_MIDI; midi <= PIANO_END_MIDI; midi++) {
+                if (!BLACK_PITCH_CLASSES.has(midi % 12)) whiteTotal++;
+            }
+
+            const whiteWidthPct = 100 / whiteTotal;
+            const blackWidthPct = whiteWidthPct * 0.62;
+            let whiteCount = 0;
+
+            for (let midi = PIANO_START_MIDI; midi <= PIANO_END_MIDI; midi++) {
+                const pitchClass = midi % 12;
+                const isBlack = BLACK_PITCH_CLASSES.has(pitchClass);
+                const noteInfo = getNoteNameFromMidi(midi);
+
+                const key = document.createElement('div');
+                key.id = `piano-key-${midi}`;
+                key.dataset.midi = midi;
+                key.title = `${noteInfo.name}${noteInfo.octave}`;
+
+                if (isBlack) {
+                    key.className = BLACK_KEY_CLASS;
+                    key.style.left = `${whiteCount * whiteWidthPct - blackWidthPct / 2}%`;
+                    key.style.width = `${blackWidthPct}%`;
+                    key.setAttribute('aria-hidden', 'true');
+                    key.innerHTML = `<span class="pointer-events-none">${noteInfo.name}${noteInfo.octave}</span>`;
+                    blackKeyElements.set(midi, key);
+                    piano.appendChild(key);
+                } else {
+                    key.className = WHITE_KEY_CLASS;
+                    key.innerHTML = `<span class="pointer-events-none">${noteInfo.name}${noteInfo.octave}</span>`;
+                    whiteKeyElements.set(midi, key);
+                    piano.appendChild(key);
+                    whiteCount++;
+                }
+            }
+        }
+
+        /**
+         * INTERACTION LOGIC & STATE MANAGEMENT
+         */
+        function selectFret(stringIdx, fret) {
+            // Cannot select frets before the capo (physically unplayable).
+            if (fret > 0 && capoFret > 0 && fret < capoFret) return;
+
+            const current = fretboardState[stringIdx];
+            const isDeselecting = current.status !== 'muted' && current.fret === fret;
+
+            if (isDeselecting) {
+                // Clicking active fret deselects it -> mutes string
+                fretboardState[stringIdx] = { status: 'muted', fret: 0 };
+            } else {
+                // Set active fret on string
+                fretboardState[stringIdx] = {
+                    status: fret === 0 ? 'open' : 'fretted',
+                    fret: fret
+                };
+                // Audible feedback for the note that was just selected (capo-shifted).
+                playSingleNote(GUITAR_STRINGS[stringIdx].midi + capoFret + fret);
+            }
+            analyzeCurrentChord();
+            updateFretboardUI();
+            saveState();
+        }
+
+        function clearFretboard() {
+            fretboardState = fretboardState.map(() => ({ status: 'muted', fret: 0 }));
+            analyzeCurrentChord();
+            updateFretboardUI();
+            saveState();
+        }
+
+        // Synchronize visual state of Fretboard UI buttons
+        function updateFretboardUI() {
+            GUITAR_STRINGS.forEach((strData, strIdx) => {
+                const state = fretboardState[strIdx];
+                const openNoteBtn = document.getElementById(`str-open-${strIdx}`);
+                const stringNumber = 6 - strIdx;
+                const openBaseClass = 'w-9 h-9 rounded-full text-xs font-mono font-bold flex items-center justify-center transition border focus-visible:ring-2 focus-visible:ring-sky-400';
+                const isOpenActive = state.status !== 'muted' && state.fret === 0;
+
+                const isStringActive = state.status !== 'muted';
+                const intervalLabel = stringIntervalLabels[strIdx];
+                const openNoteName = getNoteNameFromMidi(strData.midi).name;
+
+                // The left control always shows the open note name.
+                // The interval role (R, b3, 5, b7, etc.) is shown in a separate
+                // label to the left of the circle, only when the string is active.
+                openNoteBtn.textContent = openNoteName;
+                openNoteBtn.setAttribute('aria-pressed', String(isStringActive));
+                if (isStringActive) {
+                    openNoteBtn.className = `${openBaseClass} bg-gradient-to-r from-sky-400 to-blue-500 border-sky-300/60 text-slate-950`;
+                    openNoteBtn.setAttribute('aria-label', `String ${stringNumber} playing ${openNoteName} (${intervalLabel}). Click to mute.`);
+                } else {
+                    openNoteBtn.className = `${openBaseClass} bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200`;
+                    openNoteBtn.setAttribute('aria-label', `String ${stringNumber} (${strData.name}) open note is not playing. Activate to play it.`);
+                }
+
+                // Show/hide the interval label to the left of the circle.
+                const intervalLabelEl = intervalLabelElements[strIdx];
+                if (isStringActive && intervalLabel) {
+                    intervalLabelEl.textContent = intervalLabel;
+                    intervalLabelEl.classList.remove('opacity-0');
+                    intervalLabelEl.classList.add('text-sky-400');
+                } else {
+                    intervalLabelEl.textContent = '';
+                    intervalLabelEl.classList.remove('text-sky-400');
+                    intervalLabelEl.classList.add('opacity-0');
+                }
+
+                // Update fretted note markers (frets 1..24) for this string
+                for (let fret = 1; fret <= MAX_FRET; fret++) {
+                    const noteDot = noteDotElements[strIdx][fret];
+                    const fretCell = fretCellElements[strIdx][fret];
+                    const isActive = (state.status !== 'muted' && state.fret === fret);
+
+                    fretCell.setAttribute('aria-pressed', String(isActive));
+
+                    // Capo zone: grey out frets before the capo.
+                    const isBeforeCapo = capoFret > 0 && fret < capoFret;
+                    if (isBeforeCapo) {
+                        fretCell.classList.add('opacity-20', 'cursor-not-allowed', 'bg-slate-800/50');
+                        fretCell.setAttribute('aria-disabled', 'true');
+                    } else {
+                        fretCell.classList.remove('opacity-20', 'cursor-not-allowed', 'bg-slate-800/50');
+                        fretCell.removeAttribute('aria-disabled');
+                    }
+
+                    if (isActive) {
+                        noteDot.classList.remove('opacity-0', 'group-hover:opacity-60', 'bg-slate-700', 'text-slate-200', 'from-purple-500', 'to-indigo-600', 'from-amber-400', 'to-orange-500', 'from-sky-400', 'to-blue-500', 'text-white', 'text-slate-900', 'text-slate-950');
+
+                        // Color the dot based on the interval label shown to the left:
+                        // R → purple, 3/5 → blue, everything else → orange/amber.
+                        const intervalLabel = stringIntervalLabels[strIdx] || '';
+                        let gradientClasses;
+                        if (!intervalLabel) {
+                            // No chord detected → default blue
+                            gradientClasses = ['from-sky-400', 'to-blue-500', 'text-slate-950'];
+                        } else if (intervalLabel === 'R') {
+                            gradientClasses = ['from-purple-500', 'to-indigo-600', 'text-white'];
+                        } else if (intervalLabel === '3' || intervalLabel === '5') {
+                            gradientClasses = ['from-sky-400', 'to-blue-500', 'text-slate-950'];
+                        } else {
+                            // Everything else (sus4, 4, 9, 11, 13, b3, b7, #9, etc.) → orange/amber
+                            gradientClasses = ['from-amber-400', 'to-orange-500', 'text-slate-950'];
+                        }
+
+                        noteDot.classList.add('opacity-100', 'bg-gradient-to-r', ...gradientClasses, 'scale-110', 'shadow-lg');
+                        noteDot.textContent = noteDot.dataset.noteName;
+
+                        // Show finger suggestion on active fretted notes.
+                        const finger = stringFingerings[strIdx];
+                        const fingerSpan = document.getElementById(`finger-${strIdx}-${fret}`);
+                        if (fingerSpan) {
+                            fingerSpan.textContent = state.status === 'fretted' && finger > 0 ? finger : '';
+                            fingerSpan.classList.remove('opacity-0');
+                        }
+                    } else {
+                        noteDot.classList.remove('opacity-100', 'from-purple-500', 'to-indigo-600', 'from-amber-400', 'to-orange-500', 'from-sky-400', 'to-blue-500', 'from-slate-500', 'to-slate-600', 'text-white', 'text-slate-900', 'text-slate-950', 'bg-gradient-to-r', 'scale-110', 'shadow-lg');
+                        noteDot.classList.add('opacity-0', 'group-hover:opacity-60', 'bg-slate-700', 'text-slate-200');
+                        noteDot.textContent = noteDot.dataset.noteName;
+                        const fingerSpan = document.getElementById(`finger-${strIdx}-${fret}`);
+                        if (fingerSpan) {
+                            fingerSpan.textContent = '';
+                            fingerSpan.classList.add('opacity-0');
+                        }
+                    }
+                }
+            });
+        }
+
+        /**
+         * MUSIC THEORY ANALYSIS ENGINE (OOLIMO ARCHITECTURE)
+         */
+        function analyzeCurrentChord() {
+            // 1. Gather all active MIDI pitches from unmuted strings
+            const activeNotes = [];
+            fretboardState.forEach((state, strIdx) => {
+                if (state.status !== 'muted') {
+                    const midi = GUITAR_STRINGS[strIdx].midi + capoFret + state.fret;
+                    const info = getNoteNameFromMidi(midi);
+                    activeNotes.push({
+                        string: 6 - strIdx,
+                        midi: midi,
+                        pitchClass: midi % 12,
+                        name: info.name,
+                        octave: info.octave
+                    });
+                }
+            });
+
+            // Compute fingering suggestions for active fretted strings.
+            computeFingerings();
+
+            // Update Active Count Badge
+            document.getElementById('activeNoteCountBadge').textContent =
+                `${activeNotes.length} note${activeNotes.length === 1 ? '' : 's'} active`;
+
+            // Reset Piano Highlights
+            resetPianoHighlights();
+
+            // Clear Analysis Display if less than 1 note active
+            if (activeNotes.length === 0) {
+                renderAnalysisResults(null, [], [], activeNotes);
+                return;
+            }
+
+            // 2. Identify Bass Note (Lowest MIDI Pitch played)
+            activeNotes.sort((a, b) => a.midi - b.midi);
+            const bassNote = activeNotes[0];
+
+            // 3. Extract unique pitch classes present
+            const uniquePitchClasses = Array.from(new Set(activeNotes.map(n => n.pitchClass)));
+
+            // 4. Derive a chord name from every possible root.
+            const matches = [];
+
+            uniquePitchClasses.forEach(candidateRootPC => {
+                // Semitone intervals of all active unique pitches relative to this root.
+                const intervals = uniquePitchClasses
+                    .map(pc => (pc - candidateRootPC + 12) % 12)
+                    .sort((a, b) => a - b);
+
+                const info = deriveChordInfo(intervals);
+                if (!info) return;
+
+                const rootName = NOTE_NAMES[candidateRootPC];
+                const isBassRoot = (bassNote.pitchClass === candidateRootPC);
+                const chordName = `${rootName}${info.symbol}`;
+                const fullChordDisplay = isBassRoot ? chordName : `${chordName}/${bassNote.name}`;
+
+                matches.push({
+                    rootPC: candidateRootPC,
+                    rootName: rootName,
+                    formula: {
+                        name: info.symbol,
+                        fullName: info.fullName,
+                        description: info.degreeText,
+                        intervals: intervals
+                    },
+                    info: info,
+                    chordName: chordName,
+                    fullDisplay: fullChordDisplay,
+                    isSlash: !isBassRoot,
+                    bassNoteName: bassNote.name,
+                    score: scoreChordCandidate(info, isBassRoot),
+                    intervals: intervals
+                });
+            });
+
+            // Sort matches by score, then break ties deterministically.
+            matches.sort((a, b) =>
+                b.score - a.score ||
+                a.rootPC - b.rootPC ||
+                a.fullDisplay.localeCompare(b.fullDisplay)
+            );
+
+            // Select Best Match (or user-selected root if one was clicked)
+            const autoMatch = matches.length > 0 ? matches[0] : null;
+            let displayMatch = autoMatch;
+            if (activeRootPC !== null) {
+                const selected = matches.find(m => m.rootPC === activeRootPC);
+                if (selected) {
+                    displayMatch = selected;
+                } else {
+                    activeRootPC = null;
+                }
+            }
+
+            // Track root PC for interval color-coding on dots.
+            currentRootPC = displayMatch ? displayMatch.rootPC : null;
+
+            // Compute interval role per string for the left-side display (R, b3, 5, b7, etc.)
+            stringIntervalLabels.fill('');
+            if (displayMatch) {
+                activeNotes.forEach(note => {
+                    const strIdx = 6 - note.string;
+                    const relativeSemitones = (note.pitchClass - displayMatch.rootPC + 12) % 12;
+                    stringIntervalLabels[strIdx] = displayMatch.info.degreeByPc[relativeSemitones] || '';
+                });
+            }
+
+            // Render Analysis & Mirror Highlights
+            renderAnalysisResults(displayMatch, matches, uniquePitchClasses, activeNotes, activeRootPC !== null);
+            highlightPianoKeys(activeNotes, displayMatch);
+        }
+
+        /**
+         * Derive a chord symbol from a pitch-class set relative to its root.
+         * Follows the same stacked-3rds model as Oolimo: a triad quality,
+         * optional suspension, extension number, tensions, added tones and
+         * omitted tones. Returns null when the set has no sensible name.
+         */
+        function deriveChordInfo(intervals) {
+            const count = intervals.length;
+            if (count < 2 || intervals[0] !== 0) return null;
+
+            const has = new Array(12).fill(false);
+            intervals.forEach(semitone => { has[semitone] = true; });
+
+            const b9 = has[1];
+            const nine = has[2];
+            const m3 = has[3];
+            const M3 = has[4];
+            const P4 = has[5];
+            const b5 = has[6];
+            const P5 = has[7];
+            const m6 = has[8];
+            const M6 = has[9];
+            const b7 = has[10];
+            const M7 = has[11];
+
+            // A chord cannot contain both a minor and a major 7th.
+            if (b7 && M7) return null;
+
+            const bothThirds = m3 && M3;
+            const hasSeventh = b7 || M7;
+
+            // --- Triad quality / suspension -------------------------------
+            let quality = '';
+            let sus = '';
+
+            if (!m3 && !M3) {
+                if (P4) sus = 'sus4';
+                else if (nine) sus = 'sus2';
+            } else if (m3 && !M3) {
+                // A diminished triad only when there is no 5th, 7th or major
+                // 7th to complete it into half-diminished / diminished 7th.
+                quality = (!b5 || P5 || b7 || M7) ? 'm' : 'dim';
+            } else if (M3 && m6 && !P5 && !b7 && !M6 && !M7) {
+                quality = 'aug';
+            }
+            if (bothThirds) quality = '';
+
+            // --- Extension family -----------------------------------------
+            let ext = '';
+            if (b7) ext = '7';
+            else if (M7) ext = 'maj7';
+            else if (M6) ext = quality === 'dim' ? 'dim7' : '6';
+            else if (m6 && quality !== 'aug') ext = 'b6';
+            else if (P5 && count === 2) ext = '5';
+
+            // --- Tensions and added tones ---------------------------------
+            const tensions = [];
+            const adds = [];
+            const target = hasSeventh ? tensions : adds;
+
+            if (nine && sus !== 'sus2') target.push('9');
+            if (P4 && sus !== 'sus4') target.push('11');
+            if (M6 && hasSeventh) tensions.push('13');
+            if (b9) target.push('b9');
+            if (bothThirds) target.push('#9');
+            if (b5 && quality !== 'dim') target.push(P5 ? '#11' : 'b5');
+            if (m6 && quality !== 'aug' && ext !== 'b6') {
+                // #5 replaces the natural 5th when it's absent; b13 only
+                // applies when the natural 5th is present (a 13th extension).
+                target.push(P5 ? 'b13' : '#5');
+            }
+
+            // Merge natural 9 / 11 / 13 into the extension number
+            // (C7 + 9 => C9, Cmaj7 + 9 => Cmaj9, etc.).
+            let displayExt = ext;
+            if (hasSeventh) {
+                let highest = '';
+                if (tensions.includes('13')) highest = '13';
+                else if (tensions.includes('11')) highest = '11';
+                else if (tensions.includes('9')) highest = '9';
+
+                if (highest) {
+                    displayExt = ext === 'maj7' ? `maj${highest}` : highest;
+                    // A 9/11/13 symbol already implies the lower natural tones.
+                    for (let i = tensions.length - 1; i >= 0; i--) {
+                        if (['9', '11', '13'].includes(tensions[i])) tensions.splice(i, 1);
+                    }
+                }
+            }
+
+            // 6/9 is a standard compound symbol rather than 6add9.
+            if (displayExt === '6' && adds.includes('9')) {
+                displayExt = '6/9';
+                adds.splice(adds.indexOf('9'), 1);
+            }
+
+            // Capture the final extension before assembling the symbol.
+            const finalExt = displayExt;
+
+            // --- Omitted tones --------------------------------------------
+            const hasThird = !!(m3 || M3 || sus);
+            let omit = '';
+            if (!hasThird && count > 1 && ext !== '5') omit = '3';
+
+            // --- Assemble the symbol --------------------------------------
+            let symbol = quality;
+
+            if (quality === 'dim') {
+                symbol = displayExt === 'dim7' ? 'dim7' : 'dim';
+                displayExt = '';
+            } else if (quality === 'm' && displayExt.indexOf('maj') === 0) {
+                symbol = `m(${displayExt})`;
+                displayExt = '';
+            } else if (displayExt === 'b6') {
+                symbol += '(b6)';
+                displayExt = '';
+            } else if (sus) {
+                symbol += displayExt + sus;
+                displayExt = '';
+            } else {
+                symbol += displayExt;
+            }
+
+            if (tensions.length > 0) {
+                symbol += tensions.length === 1 ? tensions[0] : `(${tensions.join(',')})`;
+            }
+            if (adds.length > 0) {
+                symbol += adds.length === 1
+                    ? `add${adds[0]}`
+                    : `(add${adds.join(',add')})`;
+            }
+            if (omit) symbol += `(no${omit})`;
+
+            const info = {
+                symbol: symbol,
+                quality: quality,
+                sus: sus,
+                ext: ext,
+                extension: finalExt,
+                tensions: tensions,
+                adds: adds,
+                omit: omit,
+                hasThird: hasThird,
+                hasFifth: P5
+            };
+
+            // Altered tones are what make a name feel exotic. Count them so
+            // the ranking can prefer simpler, more likely interpretations.
+            const altered = tone => ['b5', '#5', 'b9', '#9', '#11', 'b13'].includes(tone);
+            info.alterationCount = tensions.filter(altered).length +
+                adds.filter(altered).length +
+                (ext === 'b6' ? 1 : 0);
+
+            // A half-diminished chord is a standard name, not an alteration.
+            if (quality === 'm' && hasSeventh && b5 && !P5 && tensions.includes('b5')) {
+                info.alterationCount -= 1;
+            }
+
+            info.fullName = describeChord(info);
+            info.degreeByPc = {};
+            intervals.forEach(semitone => {
+                info.degreeByPc[semitone] = degreeLabel(semitone, info);
+            });
+            info.degreeText = intervals.map(semitone => info.degreeByPc[semitone]).join(', ');
+
+            return info;
+        }
+
+        function degreeLabel(semitone, info) {
+            switch (semitone) {
+                case 0: return 'R';
+                case 1: return 'b9';
+                case 2: return info.sus === 'sus2' ? 'sus2' : '9';
+                case 3: return info.quality === '' && info.tensions.includes('#9') ? '#9' : 'b3';
+                case 4: return '3';
+                case 5: return info.sus === 'sus4' ? 'sus4' : '11';
+                case 6: return info.tensions.includes('#11') || info.adds.includes('#11') ? '#11' : 'b5';
+                case 7: return '5';
+                case 8:
+                    if (info.ext === 'b6') return 'b6';
+                    return info.tensions.includes('b13') || info.adds.includes('b13') ? 'b13' : '#5';
+                case 9:
+                    if (info.ext === 'dim7') return 'bb7';
+                    if (info.extension === '13') return '13';
+                    return '6';
+                case 10: return 'b7';
+                case 11: return '7';
+                default: return DEGREE_LABELS[semitone] || String(semitone);
+            }
+        }
+
+        function describeChord(info) {
+            if (info.extension === '5') return 'Power Chord';
+
+            const family = info.quality === 'm' ? 'Minor'
+                : info.quality === 'dim' ? 'Diminished'
+                : info.quality === 'aug' ? 'Augmented'
+                : 'Major';
+
+            let name;
+            if (info.sus) {
+                name = info.sus === 'sus2' ? 'Suspended 2nd' : 'Suspended 4th';
+            } else if (info.extension) {
+                if (info.extension === 'maj7') name = 'Major 7th';
+                else if (info.extension === 'maj9') name = 'Major 9th';
+                else if (info.extension === 'maj11') name = 'Major 11th';
+                else if (info.extension === 'maj13') name = 'Major 13th';
+                else if (info.extension === 'dim7') name = 'Diminished 7th';
+                else if (info.extension === '6/9') name = `${family} 6/9`;
+                else if (info.extension === '6') name = `${family} 6th`;
+                else if (info.extension === '7') name = family === 'Major' ? 'Dominant 7th' : `${family} 7th`;
+                else name = family === 'Major' ? `Dominant ${info.extension}th` : `${family} ${info.extension}th`;
+            } else {
+                name = `${family} Triad`;
+            }
+
+            const extras = [];
+            if (info.tensions.length) extras.push(info.tensions.join(', '));
+            if (info.adds.length) extras.push(info.adds.map(tone => `add${tone}`).join(', '));
+            if (info.omit) extras.push(`no ${info.omit}`);
+            if (extras.length) name += ` (${extras.join('; ')})`;
+
+            return name;
+        }
+
+        function scoreChordCandidate(info, isBassRoot) {
+            let score = 100;
+
+            if (isBassRoot) score += 15;
+            score += (info.quality === 'm' || info.quality === '') ? 12 : 6;
+            if (info.sus) score += 6;
+            if (info.hasThird) score += 5;
+
+            // An omitted 5th is common, but a name without one is less certain.
+            score += info.hasFifth ? 8 : -8;
+
+            if (info.extension && info.extension !== '5') score += 6;
+            if (info.extension === '5') score -= 8;
+
+            // sus + 6/9 is an unusual spelling; prefer a slash chord instead.
+            if (info.sus && ['6', '6/9', '9', '11', '13'].includes(info.extension)) score -= 12;
+
+            score += info.omit ? -15 : 3;
+            score -= info.alterationCount * 18;
+            if (info.ext === 'b6') score -= 6;
+
+            return score;
+        }
+
+        /**
+         * ANALYSIS & BADGES DISPLAY RENDERING
+         */
+        function renderAnalysisResults(primaryMatch, allMatches, uniquePitchClasses, activeNotes, isUserSelected) {
+            const primaryNameEl = document.getElementById('primaryChordName');
+            const formulaDescEl = document.getElementById('chordFormulaDescription');
+            const slashBadgeEl = document.getElementById('slashChordBadge');
+            const badgesContainer = document.getElementById('badgesContainer');
+            const altListEl = document.getElementById('alternativeChordsList');
+            const intervalTableEl = document.getElementById('intervalTable');
+            const rootLabelEl = document.getElementById('rootNoteLabel');
+            const liveRegionEl = document.getElementById('analysisLiveRegion');
+
+            badgesContainer.innerHTML = '';
+            altListEl.innerHTML = '';
+            intervalTableEl.innerHTML = '';
+
+            if (!primaryMatch) {
+                if (activeNotes.length === 0) {
+                    primaryNameEl.textContent = '--';
+                    formulaDescEl.textContent = 'Select frets on the guitar neck to analyze chord formulas.';
+                    liveRegionEl.textContent = 'No notes selected.';
+                    altListEl.innerHTML = '<li class="text-slate-500 italic">No alternative matches yet</li>';
+                    intervalTableEl.innerHTML = '<span class="text-slate-500 italic">No notes active</span>';
+                } else {
+                    primaryNameEl.textContent = activeNotes.map(n => n.name).join(' - ');
+                    formulaDescEl.textContent = 'Custom Pitch Cluster / Unknown Standard Chord Name';
+                    liveRegionEl.textContent = `Unknown chord: ${activeNotes.map(n => `${n.name}${n.octave}`).join(', ')}.`;
+                    altListEl.innerHTML = '<li class="text-slate-500 italic">No standard chord match</li>';
+
+                    const bassPC = activeNotes[0].pitchClass;
+                    rootLabelEl.textContent = `Bass: ${activeNotes[0].name}`;
+                    activeNotes.forEach(note => {
+                        const relativeSemitones = (note.pitchClass - bassPC + 12) % 12;
+                        const intervalName = INTERVAL_NAMES[relativeSemitones] || `${relativeSemitones} st`;
+                        const div = document.createElement('div');
+                        div.className = 'flex items-center justify-between text-xs py-0.5 border-b border-slate-800 last:border-0';
+                        div.innerHTML = `
+                            <span class="font-bold text-slate-200">Str ${note.string}: ${note.name}${note.octave}</span>
+                            <span class="font-mono text-slate-400 font-semibold">${intervalName}</span>
+                        `;
+                        intervalTableEl.appendChild(div);
+                    });
+                }
+                slashBadgeEl.classList.add('hidden');
+                if (activeNotes.length === 0) rootLabelEl.textContent = 'Root: -';
+                return;
+            }
+
+            // Render Primary Match Title — all logical names are equal and clickable.
+            primaryNameEl.innerHTML = `<button type="button" onclick="setRoot(${primaryMatch.rootPC})" class="text-sky-400 hover:text-sky-300 ${isUserSelected ? 'font-bold' : ''} cursor-default" title="${isUserSelected ? 'Active root' : 'Top-ranked match · click to set as active root'}" aria-pressed="${isUserSelected}">${primaryMatch.fullDisplay}</button>`;
+            formulaDescEl.textContent = `${primaryMatch.rootName} ${primaryMatch.formula.fullName} (${primaryMatch.formula.description})`;
+            liveRegionEl.textContent = `${primaryMatch.fullDisplay}. ${primaryMatch.rootName} ${primaryMatch.formula.fullName}.`;
+
+            // Render Inversion / Slash Badge
+            if (primaryMatch.isSlash) {
+                slashBadgeEl.classList.remove('hidden');
+                slashBadgeEl.textContent = `Inversion (${primaryMatch.bassNoteName} Bass)`;
+            } else {
+                slashBadgeEl.classList.add('hidden');
+            }
+
+            rootLabelEl.textContent = `Root: ${primaryMatch.rootName}`;
+
+            // 5. Generate Harmonization & Omission Status Badges
+            // Check for Missing 3rd
+            if (primaryMatch.info.omit === '3') {
+                createBadge('⚠️ No 3rd (Ambiguous)', 'bg-amber-500/20 text-amber-300 border-amber-500/40');
+            }
+
+            // Check for Omitted 5th
+            if (!primaryMatch.info.hasFifth && primaryMatch.info.extension !== '5' && primaryMatch.info.quality !== 'dim') {
+                createBadge('ℹ️ 5th Omitted (Implied)', 'bg-sky-500/20 text-sky-300 border-sky-500/40');
+            }
+
+            // Power Chord Badge
+            if (primaryMatch.info.extension === '5') {
+                createBadge('⚡ Power Chord (No 3rd)', 'bg-purple-500/20 text-purple-300 border-purple-500/40');
+            }
+
+            // Suspended quality
+            if (primaryMatch.info.sus) {
+                createBadge(`🎵 ${primaryMatch.info.sus === 'sus2' ? 'Sus2' : 'Sus4'}`, 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40');
+            }
+
+            // Altered / added tones
+            if (primaryMatch.info.tensions.length) {
+                createBadge(`🎯 Altered: ${primaryMatch.info.tensions.join(', ')}`, 'bg-rose-500/20 text-rose-300 border-rose-500/40');
+            }
+            if (primaryMatch.info.adds.length) {
+                createBadge(`➕ Added: ${primaryMatch.info.adds.map(t => 'add' + t).join(', ')}`, 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40');
+            }
+
+            // Inverted Slash Badge in Badges Container
+            if (primaryMatch.isSlash) {
+                createBadge(`🎼 Bass Inversion /${primaryMatch.bassNoteName}`, 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40');
+            }
+
+            // Render Ranked Alternative Chord Names
+            const uniqueAltNames = new Set();
+            allMatches.forEach(alt => {
+                const isActiveRoot = activeRootPC !== null && activeRootPC === alt.rootPC;
+                const isTopAuto = activeRootPC === null && alt === primaryMatch;
+                if (isActiveRoot || isTopAuto) return;
+                if (!uniqueAltNames.has(alt.fullDisplay)) {
+                    uniqueAltNames.add(alt.fullDisplay);
+                    const li = document.createElement('li');
+                    li.className = 'flex items-center justify-between font-mono-code text-slate-300';
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.textContent = alt.fullDisplay;
+                    btn.className = `text-sky-400 hover:text-sky-300 ${isActiveRoot ? 'font-bold' : ''} cursor-default`;
+                    btn.title = isActiveRoot ? 'Active root' : 'Click to set as active root';
+                    btn.setAttribute('aria-pressed', String(isActiveRoot));
+                    btn.onclick = () => setRoot(alt.rootPC);
+                    li.appendChild(btn);
+                    li.appendChild(document.createTextNode(' '));
+                    const formulaSpan = document.createElement('span');
+                    formulaSpan.className = 'text-[10px] text-slate-500';
+                    formulaSpan.textContent = alt.formula.fullName;
+                    li.appendChild(formulaSpan);
+                    altListEl.appendChild(li);
+                }
+            });
+
+            if (uniqueAltNames.size === 0) {
+                altListEl.innerHTML = '<li class="text-slate-500 italic">No other logical matches</li>';
+            }
+
+            // Render Active Interval Breakdown Table
+            activeNotes.forEach(note => {
+                const relativeSemitones = (note.pitchClass - primaryMatch.rootPC + 12) % 12;
+                const intervalName = primaryMatch.info.degreeByPc[relativeSemitones] ||
+                    INTERVAL_NAMES[relativeSemitones] ||
+                    `${relativeSemitones} st`;
+
+                const div = document.createElement('div');
+                div.className = 'flex items-center justify-between text-xs py-0.5 border-b border-slate-800 last:border-0';
+                div.innerHTML = `
+                    <span class="font-bold text-slate-200">Str ${note.string}: ${note.name}${note.octave}</span>
+                    <span class="font-mono text-sky-400 font-semibold">${intervalName}</span>
+                `;
+                intervalTableEl.appendChild(div);
+            });
+        }
+
+        function createBadge(text, colorClasses) {
+            const container = document.getElementById('badgesContainer');
+            const badge = document.createElement('span');
+            badge.className = `text-xs font-semibold px-2.5 py-1 rounded-lg border ${colorClasses} shadow-sm`;
+            badge.textContent = text;
+            container.appendChild(badge);
+        }
+
+        /**
+         * DYNAMIC PIANO KEYBOARD HIGHLIGHTING
+         */
+        function resetPianoHighlights() {
+            whiteKeyElements.forEach(key => { key.className = WHITE_KEY_CLASS; });
+            blackKeyElements.forEach(key => { key.className = BLACK_KEY_CLASS; });
+        }
+
+        function highlightPianoKeys(activeNotes, primaryMatch) {
+            const referenceRootPC = primaryMatch ? primaryMatch.rootPC : activeNotes[0].pitchClass;
+
+            activeNotes.forEach(note => {
+                const key = whiteKeyElements.get(note.midi) || blackKeyElements.get(note.midi);
+                if (!key) return;
+
+                const relativeSemitones = (note.pitchClass - referenceRootPC + 12) % 12;
+
+                // Color Coding by Interval Role
+                let gradientClasses = ['from-sky-400', 'to-blue-500', 'text-slate-950']; // 3rd / 5th / 7th
+                if (relativeSemitones === 0) {
+                    gradientClasses = ['from-purple-500', 'to-indigo-600', 'text-white']; // Root
+                } else if ([2, 5, 9].includes(relativeSemitones)) {
+                    gradientClasses = ['from-amber-400', 'to-orange-500', 'text-slate-950']; // Extensions
+                }
+
+                // Keep the key exactly the same size — only change its color.
+                key.classList.remove('text-slate-600', 'text-slate-400');
+                key.classList.add('bg-gradient-to-b', ...gradientClasses);
+            });
+        }
+
+        /**
+         * AUDIO PREVIEW SYNTHESIZER (WEB AUDIO API)
+         */
+        let audioCtx = null;
+        let masterGain = null;
+        let activeVoices = [];
+
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioCtor = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtor) return null;
+
+                try {
+                    audioCtx = new AudioCtor();
+                    masterGain = audioCtx.createGain();
+                    masterGain.gain.value = 0.7;
+
+                    // Keep six-note voicings from clipping.
+                    const compressor = audioCtx.createDynamicsCompressor();
+                    compressor.threshold.value = -18;
+                    compressor.knee.value = 24;
+                    compressor.ratio.value = 6;
+                    compressor.attack.value = 0.003;
+                    compressor.release.value = 0.25;
+
+                    masterGain.connect(compressor);
+                    compressor.connect(audioCtx.destination);
+                } catch (error) {
+                    console.error('Web Audio is not available in this browser.', error);
+                    audioCtx = null;
+                    masterGain = null;
+                    return null;
+                }
+            }
+
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().catch(() => {});
+            }
+            return audioCtx;
+        }
+
+        function stopActiveVoices() {
+            if (!audioCtx) return;
+
+            const now = audioCtx.currentTime;
+            activeVoices.forEach(({ gain, oscillators }) => {
+                try {
+                    gain.gain.cancelScheduledValues(now);
+                    gain.gain.setTargetAtTime(0.0001, now, 0.02);
+                    oscillators.forEach(osc => osc.stop(now + 0.08));
+                } catch (error) {
+                    // Oscillator may already have finished naturally.
+                }
+            });
+            activeVoices = [];
+        }
+
+        // Play a short single note so the player hears the pitch they clicked.
+        function playSingleNote(midi) {
+            const ctx = initAudio();
+            if (!ctx || !masterGain) return;
+
+            const now = ctx.currentTime;
+            const freq = referenceA4 * Math.pow(2, (midi - 69) / 12);
+            const endTime = now + 0.9;
+
+            const osc = ctx.createOscillator();
+            const harmonic = ctx.createOscillator();
+            const harmonicGain = ctx.createGain();
+            const filter = ctx.createBiquadFilter();
+            const gain = ctx.createGain();
+
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now);
+
+            harmonic.type = 'sine';
+            harmonic.frequency.setValueAtTime(freq * 2, now);
+            harmonic.detune.setValueAtTime(4, now);
+            harmonicGain.gain.value = 0.16;
+
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(Math.min(freq * 6, 9000), now);
+            filter.Q.value = 0.6;
+
+            gain.gain.setValueAtTime(0.0001, now);
+            gain.gain.exponentialRampToValueAtTime(0.12, now + 0.012);
+            gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
+
+            osc.connect(filter);
+            harmonic.connect(harmonicGain);
+            harmonicGain.connect(filter);
+            filter.connect(gain);
+            gain.connect(masterGain);
+
+            osc.start(now);
+            harmonic.start(now);
+            osc.stop(endTime + 0.05);
+            harmonic.stop(endTime + 0.05);
+        }
+
+        function playAudioChord() {
+            const ctx = initAudio();
+            if (!ctx || !masterGain) return;
+
+            const activeMidis = fretboardState
+                .filter(s => s.status !== 'muted')
+                .map((s, idx) => GUITAR_STRINGS[idx].midi + s.fret)
+                .sort((a, b) => a - b);
+
+            if (activeMidis.length === 0) return;
+
+            stopActiveVoices();
+            const now = ctx.currentTime;
+
+            activeMidis.forEach((midi, index) => {
+                // Convert MIDI pitch to Hz using the selected A4 reference
+                const freq = referenceA4 * Math.pow(2, (midi - 69) / 12);
+
+                // Stagger the notes low to high for a strummed feel.
+                const delay = index * 0.045;
+                const startTime = now + delay;
+                const endTime = startTime + 2.0;
+
+                const osc = ctx.createOscillator();
+                const harmonic = ctx.createOscillator();
+                const harmonicGain = ctx.createGain();
+                const filter = ctx.createBiquadFilter();
+                const gain = ctx.createGain();
+
+                osc.type = 'triangle'; // Warm body
+                osc.frequency.setValueAtTime(freq, startTime);
+
+                harmonic.type = 'sine'; // Quiet second harmonic for definition
+                harmonic.frequency.setValueAtTime(freq * 2, startTime);
+                harmonic.detune.setValueAtTime(4, startTime);
+                harmonicGain.gain.value = 0.16;
+
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(Math.min(freq * 6, 9000), startTime);
+                filter.Q.value = 0.6;
+
+                gain.gain.setValueAtTime(0.0001, startTime);
+                gain.gain.exponentialRampToValueAtTime(0.14, startTime + 0.012);
+                gain.gain.exponentialRampToValueAtTime(0.0001, endTime);
+
+                osc.connect(filter);
+                harmonic.connect(harmonicGain);
+                harmonicGain.connect(filter);
+                filter.connect(gain);
+                gain.connect(masterGain);
+
+                osc.start(startTime);
+                harmonic.start(startTime);
+                osc.stop(endTime + 0.05);
+                harmonic.stop(endTime + 0.05);
+
+                activeVoices.push({ gain, oscillators: [osc, harmonic] });
+            });
+        }
+
+        // Helper: Convert MIDI to Note Name & Octave
+        function getNoteNameFromMidi(midi) {
+            const pitchClass = midi % 12;
+            const octave = Math.floor(midi / 12) - 1;
+            return {
+                name: NOTE_NAMES[pitchClass],
+                octave: octave
+            };
+        }
+    </script>
+</body>
+</html>
