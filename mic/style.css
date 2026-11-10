@@ -1,11 +1,37 @@
 :root {
-    --bg: #14181d;
-    --panel: #1e242c;
-    --knob: #2b323b;
-    --knob-indicator: #e74c3c;
-    --text: #e6e9ec;
-    --muted: #808a96;
-    --accent: #3d9bf0;
+    color-scheme: light;
+    --bg: #ffffff;
+    --panel: #ffffff;
+    --field: #ffffff;
+    --knob: #f2f2f2;
+    --knob-indicator: #333333;
+    --text: #111111;
+    --muted: #666666;
+    --accent: #333333;
+    --line: #cccccc;
+    --hover: #e8e8e8;
+    --meter: #444444;
+    --track-on: #dddddd;
+    --rec: #c00000;
+    --toggle: #222222;
+}
+
+html.theme-dark {
+    color-scheme: dark;
+    --bg: #141414;
+    --panel: #1e1e1e;
+    --field: #1e1e1e;
+    --knob: #2a2a2a;
+    --knob-indicator: #eeeeee;
+    --text: #eeeeee;
+    --muted: #aaaaaa;
+    --accent: #eeeeee;
+    --line: #444444;
+    --hover: #333333;
+    --meter: #bbbbbb;
+    --track-on: #333333;
+    --rec: #e05555;
+    --toggle: #eeeeee;
 }
 
 * {
@@ -17,14 +43,14 @@
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     background: var(--bg);
     color: var(--text);
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 100vh;
-    overflow: hidden;
+    min-height: 100vh;
+    padding: 1rem;
     cursor: default;
 }
 
@@ -33,6 +59,7 @@ body {
     align-items: center;
     justify-content: space-between;
     margin-bottom: 0.9rem;
+    gap: 0.75rem;
 }
 
 .switch {
@@ -40,17 +67,18 @@ body {
     width: 48px;
     height: 26px;
     background: var(--knob);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 26px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
     cursor: pointer;
-    transition: background 0.25s, box-shadow 0.25s;
-    z-index: 50;
     flex: 0 0 auto;
 }
 
 .header-balance {
     width: 48px;
-    visibility: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 0 0 auto;
 }
 
 .switch::after {
@@ -60,10 +88,9 @@ body {
     left: 3px;
     width: 18px;
     height: 18px;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
-    transition: transform 0.25s;
+    border-radius: 2px;
+    background: var(--knob-indicator);
+    transition: transform 0.15s;
 }
 
 #effects-switch {
@@ -71,8 +98,7 @@ body {
 }
 
 #effects-switch:checked + .switch {
-    background: rgba(61, 155, 240, 0.35);
-    box-shadow: 0 0 12px rgba(61, 155, 240, 0.45);
+    background: var(--track-on);
 }
 
 #effects-switch:checked + .switch::after {
@@ -82,8 +108,8 @@ body {
 .container {
     background: var(--panel);
     padding: 1.2rem 1.5rem;
-    border-radius: 14px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--line);
+    border-radius: 0;
     width: min(560px, 92vw);
     position: relative;
 }
@@ -93,7 +119,6 @@ h1 {
     font-size: 1.15rem;
     margin-bottom: 0;
     font-weight: 600;
-    letter-spacing: 0.5px;
 }
 
 .selector {
@@ -111,25 +136,25 @@ h1 {
 }
 
 .selector select {
-    background: var(--knob);
+    background: var(--field);
     color: var(--text);
-    border: none;
-    border-radius: 8px;
+    border: 1px solid var(--line);
+    border-radius: 0;
     padding: 0.6rem 0.8rem;
     font-size: 0.95rem;
     cursor: pointer;
     outline: none;
-    appearance: none;
 }
 
 .selector select:hover {
-    filter: brightness(1.2);
+    border-color: var(--muted);
 }
 
 .meter {
     background: var(--knob);
+    border: 1px solid var(--line);
     height: 10px;
-    border-radius: 5px;
+    border-radius: 0;
     overflow: hidden;
     margin-bottom: 0.9rem;
 }
@@ -137,7 +162,7 @@ h1 {
 .meter-bar {
     height: 100%;
     width: 0%;
-    background: linear-gradient(90deg, #27ae60, #f1c40f, #e74c3c);
+    background: var(--meter);
     transition: width 60ms linear;
 }
 
@@ -145,7 +170,7 @@ h1 {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
     gap: 0.5rem;
-    transition: opacity 0.2s, filter 0.2s;
+    transition: opacity 0.2s;
 }
 
 .knob {
@@ -159,8 +184,8 @@ h1 {
     width: 60px;
     height: 60px;
     border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #39424d, var(--knob));
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6), inset 0 2px 3px rgba(255, 255, 255, 0.15);
+    background: var(--knob);
+    border: 1px solid var(--line);
     position: relative;
     cursor: pointer;
 }
@@ -170,10 +195,9 @@ h1 {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 3px;
+    width: 2px;
     height: 18px;
     background: var(--knob-indicator);
-    border-radius: 2px;
     transform-origin: 50% 0;
     transform: translate(-50%, -0%) rotate(var(--knob-rotation, 0deg));
 }
@@ -198,7 +222,7 @@ h1 {
 
 .knob-value {
     font-size: 0.75rem;
-    color: var(--accent);
+    color: var(--text);
     font-weight: 600;
     min-height: 1em;
 }
@@ -206,7 +230,17 @@ h1 {
 .record-section {
     position: relative;
     margin-top: 1rem;
-    height: 44px;
+    height: 58px;
+}
+
+.rec-note {
+    position: absolute;
+    left: 0;
+    top: calc(50% + 18px);
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    white-space: nowrap;
 }
 
 #record-btn {
@@ -214,24 +248,18 @@ h1 {
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    background: var(--knob);
+    background: var(--field);
     color: var(--text);
-    border: none;
-    border-radius: 10px;
+    border: 1px solid var(--line);
+    border-radius: 0;
     padding: 0.6rem 2rem;
     font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
-    letter-spacing: 0.5px;
-    transition: background 0.2s, transform 0.1s;
 }
 
 #record-btn:hover:not(:disabled) {
-    filter: brightness(1.25);
-}
-
-#record-btn:active:not(:disabled) {
-    transform: translate(-50%, -50%) scale(0.96);
+    background: var(--knob);
 }
 
 #record-btn:disabled {
@@ -240,13 +268,9 @@ h1 {
 }
 
 #record-btn.recording {
-    background: #e74c3c;
-    animation: pulse 1.2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.5); }
-    50% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+    background: var(--rec);
+    border-color: var(--rec);
+    color: #ffffff;
 }
 
 .rec-feedback {
@@ -271,8 +295,7 @@ h1 {
 }
 
 #track-switch:checked + .switch {
-    background: rgba(61, 155, 240, 0.35);
-    box-shadow: 0 0 12px rgba(61, 155, 240, 0.45);
+    background: var(--track-on);
 }
 
 #track-switch:checked + .switch::after {
@@ -284,11 +307,10 @@ h1 {
     height: 12px;
     border-radius: 50%;
     background: transparent;
-    transition: background 0.2s;
 }
 
 #rec-indicator.on {
-    background: #e74c3c;
+    background: var(--rec);
 }
 
 #rec-time {
@@ -302,23 +324,33 @@ h1 {
 .knobs.bypassed {
     opacity: 0.35;
     pointer-events: none;
-    filter: grayscale(1);
-    transition: opacity 0.2s, filter 0.2s;
 }
 
 .badge {
     position: fixed;
     padding: 0.3rem 0.7rem;
-    background: var(--knob);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 8px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 0;
     font-size: 0.85rem;
     color: var(--text);
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.15s;
     z-index: 100;
     white-space: nowrap;
+}
+
+.theme-toggle {
+    position: static;
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    background: var(--toggle);
+    border: 1px solid #888888;
+    border-radius: 0;
+    cursor: pointer;
+    z-index: 200;
 }
 
 @media (max-width: 480px) {
